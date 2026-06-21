@@ -18,41 +18,34 @@
                 makeWrapper
               ];
               buildInputs = with pkgs; [
-                libglvnd
-                mesa
-                libva.out
-                libpulseaudio
-                alsa-lib
-                dbus.lib
                 ffmpeg.lib
               ];
 
-              postBuild = let
-              libPath = builtins.concatStringsSep ":" (map (it: "${it}/lib") buildInputs);
-              in ''
-                for bin in $out/bin/*; do
-                  wrapProgram "$bin" --set LD_LIBRARY_PATH "${libPath}"
-                done
-              '';
+              postBuild =
+                let
+                  libPath = builtins.concatStringsSep ":" (map (it: "${it}/lib") buildInputs);
+                in
+                ''
+                  for bin in $out/bin/*; do
+                    wrapProgram "$bin" --set LD_LIBRARY_PATH "${libPath}"
+                  done
+                '';
             };
           };
           devShells = rec {
-            mpv-java = pkgs.stdenvNoCC.mkDerivation {
-              name = "mpv-java";
+            libav-java = pkgs.stdenvNoCC.mkDerivation {
+              name = "libav-java";
               version = "0.1.0";
 
               nativeBuildInputs = with pkgs; [
                 packages.jdk25-wrapped
                 gradle_9
               ];
-              buildInputs = with pkgs; [
-                libglvnd
-              ];
               shellHook = ''
                 export JAVA_HOME="${packages.jdk25-wrapped}"
               '';
             };
-            default = mpv-java;
+            default = libav-java;
           };
         };
         flake = { };
