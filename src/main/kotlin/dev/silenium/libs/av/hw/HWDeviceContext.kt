@@ -1,35 +1,28 @@
 package dev.silenium.libs.av.hw
 
+import dev.silenium.libs.av.core.BufferRef
 import dev.silenium.libs.av.core.checkAV
 import dev.silenium.libs.av.foreign.DoubleDestructionProtection
 import dev.silenium.libs.av.foreign.NativeEnum
+import org.ffmpeg.bindings.AVBufferRef
 import org.ffmpeg.bindings.FFMPEG
-import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
-import java.lang.foreign.ValueLayout
 
-data class HWDeviceContext(val bufferRef: MemorySegment) : DoubleDestructionProtection<MemorySegment>() {
-    override val value: MemorySegment by ::bufferRef
-    override fun destroyInternal() {
-        FFMPEG.av_buffer_unref(value)
-    }
+data class HWDeviceContext(override val value: BufferRef) : DoubleDestructionProtection<BufferRef>() {
+    override fun destroyInternal() = value.close()
 
     companion object {
-        fun create(type: HWDeviceType, device: String /*TODO: Flags and Opts*/): HWDeviceContext =
-            Arena.ofConfined().use { arena ->
-                val ctxPtr = arena.allocate(ValueLayout.ADDRESS)
+        fun create(type: HWDeviceType, device: String /*TODO: Flags and Opts*/) =
+            BufferRef.createPtrPtr(AVBufferRef.layout()) { arena, ctxPtr ->
                 FFMPEG.av_hwdevice_ctx_create(ctxPtr, type.value, arena.allocateFrom(device), MemorySegment.NULL, 0)
                     .checkAV("av_hwdevice_ctx_create")
-                HWDeviceContext(ctxPtr.get(ValueLayout.ADDRESS, 0))
-            }
+            }.map(::HWDeviceContext)
 
-        fun derive(parent: HWDeviceContext, type: HWDeviceType /*TODO: Flags*/): HWDeviceContext =
-            Arena.ofConfined().use { arena ->
-                val ctxPtr = arena.allocate(ValueLayout.ADDRESS)
-                FFMPEG.av_hwdevice_ctx_create_derived(ctxPtr, type.value, parent.bufferRef, 0)
+        fun derive(parent: HWDeviceContext, type: HWDeviceType /*TODO: Flags*/): Result<HWDeviceContext> =
+            BufferRef.createPtrPtr(AVBufferRef.layout()) { _, ctxPtr ->
+                FFMPEG.av_hwdevice_ctx_create_derived(ctxPtr, type.value, parent.value.value, 0)
                     .checkAV("av_hwdevice_ctx_create_derived")
-                HWDeviceContext(ctxPtr.get(ValueLayout.ADDRESS, 0))
-            }
+            }.map(::HWDeviceContext)
     }
 }
 

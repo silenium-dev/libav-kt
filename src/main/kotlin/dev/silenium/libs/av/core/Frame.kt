@@ -1,38 +1,101 @@
 package dev.silenium.libs.av.core
 
-import dev.silenium.libs.av.foreign.DoubleDestructionProtection
-import dev.silenium.libs.av.foreign.asIntArray
-import dev.silenium.libs.av.foreign.asPointerArray
-import dev.silenium.libs.av.foreign.parseNativeEnum
-import dev.silenium.libs.av.foreign.pointerTo
+import dev.silenium.libs.av.foreign.NativeEnum
+import org.ffmpeg.bindings.AVDictionaryEntry
 import org.ffmpeg.bindings.AVFrame
 import org.ffmpeg.bindings.FFMPEG
-import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
+import java.util.*
 
-sealed class Frame(override val value: MemorySegment) : DoubleDestructionProtection<MemorySegment>() {
-    init {
-        require(value != MemorySegment.NULL) { "Frame cannot be null" }
+data class Crop(val top: ULong, val bottom: ULong, val left: ULong, val right: ULong) {
+    internal fun apply(frame: MemorySegment) {
+        AVFrame.crop_top(frame, top.toLong())
+        AVFrame.crop_bottom(frame, bottom.toLong())
+        AVFrame.crop_left(frame, left.toLong())
+        AVFrame.crop_right(frame, right.toLong())
     }
 
-    val width get() = AVFrame.width(value)
-    val height get() = AVFrame.height(value)
-    val format get() = parseNativeEnum<PixelFormat>(AVFrame.format(value))
-    val linesize: Array<Int>
-        get() = AVFrame.linesize(value).asIntArray(8)
+    companion object {
+        internal fun from(frame: MemorySegment) = Crop(
+            AVFrame.crop_top(frame).toULong(),
+            AVFrame.crop_bottom(frame).toULong(),
+            AVFrame.crop_left(frame).toULong(),
+            AVFrame.crop_right(frame).toULong(),
+        )
+    }
+}
 
-    data class Simple(override val value: MemorySegment) : Frame(value) {
-        val data: Array<MemorySegment>
-            get() = AVFrame.data(value).asPointerArray(8)
+enum class PictureType : NativeEnum
+
+sealed interface Frame {
+    sealed interface Video : Frame {
+        var width: Int
+        var height: Int
+        var format: PixelFormat
+        var pictureType: PictureType
+        var sampleAspectRatio: Rational
+        var repeatPict: Int
+
+        var colorRange: ColorRange
+        var colorPrimaries: ColorPrimaries
+        var colorTrc: ColorTransferCharacteristics
+        var colorSpace: ColorSpace
+        var chromaLocation: ChromaLocation
+
+        var alphaMode: AlphaMode
+        var crop: Crop
     }
 
-    data class VAAPI(override val value: MemorySegment) : Frame(value) {
-        val surfaceId: Long
-            get() = AVFrame.data(value).getAtIndex(ValueLayout.ADDRESS, 3).address()
+    sealed interface Audio : Frame {
+        var samples: Int
+        var sampleRate: Int
+        var format: SampleFormat
+        var channelLayout: ChannelLayout
     }
 
-    override fun destroyInternal() = Arena.ofConfined().use {
-        FFMPEG.av_frame_free(it.pointerTo(value))
+    var linesize: List<Int>
+
+    var buf: List<BufferRef?>
+    var data: List<MemorySegment?>
+
+    var pts: Long
+    var pktDts: Long
+    var timeBase: Rational
+    var bestEffortTimestamp: Long
+    var duration: Long
+    var quality: Int
+    var opaque: MemorySegment
+
+    var extendedBuf: List<BufferRef?>
+    var extendedData: List<MemorySegment?>
+
+    var sideData: List<SideData>
+    var flags: Set<Flags>
+
+    var metadata: Dictionary
+    var decodeErrorFlags: Set<DecodeErrorFlags>
+    var hwFramesCtx: BufferRef?
+    var opaqueRef: BufferRef?
+    var privateRef: MemorySegment
+
+    enum class Flags : NativeEnum {}
+    enum class DecodeErrorFlags : NativeEnum {}
+}
+
+data class Dictionary(val value: MemorySegment) {
+    val asMap: Map<String, String> by lazy {
+        val result = mutableMapOf<String, String>()
+        var entryPtr = FFMPEG.av_dict_iterate(value, MemorySegment.NULL)
+        while (entryPtr != MemorySegment.NULL) {
+            val entry = entryPtr
+                .get(ValueLayout.ADDRESS, 0)
+                .reinterpret(AVDictionaryEntry.sizeof())
+            val key = AVDictionaryEntry.key(entry).reinterpret(Long.MAX_VALUE).getString(0)
+            val value = AVDictionaryEntry.value(entry).reinterpret(Long.MAX_VALUE).getString(0)
+            result[key] = value
+            entryPtr = FFMPEG.av_dict_iterate(this.value, entryPtr)
+        }
+        result
     }
 }
