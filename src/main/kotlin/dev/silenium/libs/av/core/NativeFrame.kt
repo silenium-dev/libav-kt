@@ -6,7 +6,7 @@ import org.ffmpeg.bindings.FFMPEG
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
-sealed class FrameBase : DoubleDestructionProtection<MemorySegment>(), Frame {
+sealed class NativeFrame : DoubleDestructionProtection<MemorySegment>(), Frame {
     protected val arena: Arena = Arena.ofAuto()
 
     override var linesize: List<Int>
@@ -88,7 +88,7 @@ sealed class FrameBase : DoubleDestructionProtection<MemorySegment>(), Frame {
         FFMPEG.av_frame_free(it.pointerTo(value))
     }
 
-    data class Video(override val value: MemorySegment) : FrameBase(), Frame.Video {
+    data class Video(override val value: MemorySegment) : NativeFrame(), Frame.Video {
         override var width: Int
             get() = AVFrame.width(value)
             set(value) = AVFrame.width(this.value, value)
@@ -130,9 +130,13 @@ sealed class FrameBase : DoubleDestructionProtection<MemorySegment>(), Frame {
         override var alphaMode: AlphaMode
             get() = parseNativeEnum(AVFrame.alpha_mode(value))
             set(value) = AVFrame.alpha_mode(this.value, value.value)
+
+        companion object {
+            fun allocate(): Video = FFMPEG.av_frame_alloc().reinterpret(AVFrame.sizeof()).let(::Video)
+        }
     }
 
-    data class Audio(override val value: MemorySegment) : FrameBase(), Frame.Audio {
+    data class Audio(override val value: MemorySegment) : NativeFrame(), Frame.Audio {
         override var channelLayout: ChannelLayout
             get() = ChannelLayout(AVFrame.ch_layout(value))
             set(value) = AVFrame.ch_layout(this.value, value.value)
@@ -145,5 +149,9 @@ sealed class FrameBase : DoubleDestructionProtection<MemorySegment>(), Frame {
         override var samples: Int
             get() = AVFrame.nb_samples(value)
             set(value) = AVFrame.nb_samples(this.value, value)
+
+        companion object {
+            fun allocate(): Audio = FFMPEG.av_frame_alloc().reinterpret(AVFrame.sizeof()).let(::Audio)
+        }
     }
 }

@@ -28,7 +28,7 @@ data class Crop(val top: ULong, val bottom: ULong, val left: ULong, val right: U
 
 enum class PictureType : NativeEnum
 
-sealed interface Frame {
+sealed interface Frame : AutoCloseable {
     sealed interface Video : Frame {
         var width: Int
         var height: Int

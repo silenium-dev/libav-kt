@@ -1,6 +1,8 @@
 package dev.silenium.libs.av.hw
 
 import dev.silenium.libs.av.core.BufferRef
+import dev.silenium.libs.av.core.Frame
+import dev.silenium.libs.av.core.NativeFrame
 import dev.silenium.libs.av.core.PixelFormat
 import dev.silenium.libs.av.core.av
 import dev.silenium.libs.av.foreign.DoubleDestructionProtection
@@ -49,7 +51,13 @@ sealed class HWFramesContext : DoubleDestructionProtection<BufferRef>() {
         }
     }
 
-    data class Initialized(override val value: BufferRef) : HWFramesContext()
+    data class Initialized(override val value: BufferRef) : HWFramesContext() {
+        fun allocateFrame(): Result<Frame.Video> {
+            val frame = NativeFrame.Video.allocate()
+            val ret = FFMPEG.av_hwframe_get_buffer(value.value, frame.value, 0)
+            return Result.av(ret, "av_hwframe_get_buffer") { frame }
+        }
+    }
 
     override fun destroyInternal() = value.destroy()
 }
