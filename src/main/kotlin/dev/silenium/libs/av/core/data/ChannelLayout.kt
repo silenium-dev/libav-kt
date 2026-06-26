@@ -1,4 +1,4 @@
-package dev.silenium.libs.av.core
+package dev.silenium.libs.av.core.data
 
 import java.lang.foreign.MemorySegment
 

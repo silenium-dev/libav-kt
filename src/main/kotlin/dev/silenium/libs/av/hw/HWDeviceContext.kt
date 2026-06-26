@@ -1,6 +1,6 @@
 package dev.silenium.libs.av.hw
 
-import dev.silenium.libs.av.core.BufferRef
+import dev.silenium.libs.av.core.data.BufferRef
 import dev.silenium.libs.av.core.checkAV
 import dev.silenium.libs.av.foreign.DoubleDestructionProtection
 import dev.silenium.libs.av.foreign.NativeEnum

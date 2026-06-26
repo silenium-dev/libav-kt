@@ -1,4 +1,4 @@
-package dev.silenium.libs.av.core
+package dev.silenium.libs.av.core.data
 
 import dev.silenium.libs.av.foreign.DoubleDestructionProtection
 import dev.silenium.libs.av.foreign.pointerTo

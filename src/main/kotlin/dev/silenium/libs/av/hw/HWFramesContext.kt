@@ -1,8 +1,8 @@
 package dev.silenium.libs.av.hw
 
-import dev.silenium.libs.av.core.BufferRef
-import dev.silenium.libs.av.core.Frame
-import dev.silenium.libs.av.core.NativeFrame
+import dev.silenium.libs.av.core.data.BufferRef
+import dev.silenium.libs.av.core.data.Frame
+import dev.silenium.libs.av.core.data.NativeFrame
 import dev.silenium.libs.av.core.PixelFormat
 import dev.silenium.libs.av.core.av
 import dev.silenium.libs.av.foreign.DoubleDestructionProtection

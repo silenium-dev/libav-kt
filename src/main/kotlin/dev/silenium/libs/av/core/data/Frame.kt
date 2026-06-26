@@ -1,12 +1,19 @@
-package dev.silenium.libs.av.core
+package dev.silenium.libs.av.core.data
 
+import dev.silenium.libs.av.core.AlphaMode
+import dev.silenium.libs.av.core.ChromaLocation
+import dev.silenium.libs.av.core.ColorPrimaries
+import dev.silenium.libs.av.core.ColorRange
+import dev.silenium.libs.av.core.ColorSpace
+import dev.silenium.libs.av.core.ColorTransferCharacteristics
+import dev.silenium.libs.av.core.PixelFormat
+import dev.silenium.libs.av.core.SampleFormat
 import dev.silenium.libs.av.foreign.NativeEnum
 import org.ffmpeg.bindings.AVDictionaryEntry
 import org.ffmpeg.bindings.AVFrame
 import org.ffmpeg.bindings.FFMPEG
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
-import java.util.*
 
 data class Crop(val top: ULong, val bottom: ULong, val left: ULong, val right: ULong) {
     internal fun apply(frame: MemorySegment) {
@@ -70,7 +77,7 @@ sealed interface Frame : AutoCloseable {
     var extendedBuf: List<BufferRef?>
     var extendedData: List<MemorySegment?>
 
-    var sideData: List<SideData>
+    var sideData: List<FrameSideData>
     var flags: Set<Flags>
 
     var metadata: Dictionary
