@@ -16,8 +16,19 @@ fun Int.checkAV(operation: String) {
         throw AVException(this, operation)
     }
 }
+fun Int.avResult(operation: String): Result<Unit> {
+    if (this < 0) {
+        return Result.failure(AVException(this, operation))
+    }
+    return Result.success(Unit)
+}
 
 fun <T> Result.Companion.av(ret: Int, operation: String, block: () -> T): Result<T> = when (ret) {
     0 -> Result.success(block())
+    else -> Result.failure(AVException(ret, operation))
+}
+
+fun Result.Companion.av(ret: Int, operation: String): Result<Unit> = when (ret) {
+    0 -> Result.success(Unit)
     else -> Result.failure(AVException(ret, operation))
 }

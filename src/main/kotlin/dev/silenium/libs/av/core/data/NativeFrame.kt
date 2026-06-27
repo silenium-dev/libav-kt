@@ -1,15 +1,9 @@
 package dev.silenium.libs.av.core.data
 
-import dev.silenium.libs.av.core.AlphaMode
-import dev.silenium.libs.av.core.ChromaLocation
-import dev.silenium.libs.av.core.ColorPrimaries
-import dev.silenium.libs.av.core.ColorRange
-import dev.silenium.libs.av.core.ColorSpace
-import dev.silenium.libs.av.core.ColorTransferCharacteristics
-import dev.silenium.libs.av.core.PixelFormat
-import dev.silenium.libs.av.core.SampleFormat
+import dev.silenium.libs.av.core.*
 import dev.silenium.libs.av.foreign.*
 import org.ffmpeg.bindings.AVFrame
+import org.ffmpeg.bindings.AVFrameSideData
 import org.ffmpeg.bindings.FFMPEG
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -43,7 +37,9 @@ sealed class NativeFrame : DoubleDestructionProtection<MemorySegment>(), Frame {
 
     override var sideData: List<FrameSideData>
         get() = AVFrame.side_data(value)
-            .asPointerArray(AVFrame.nb_side_data(value), ::FrameSideData)
+            .asPointerArray(AVFrame.nb_side_data(value)) {
+                FrameSideData(it.reinterpret(AVFrameSideData.sizeof()))
+            }
         set(value) = AVFrame.side_data(this.value, value.asNativeArray(arena, FrameSideData::value))
 
     override var flags: Set<Frame.Flags>

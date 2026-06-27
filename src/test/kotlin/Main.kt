@@ -2,7 +2,11 @@ package dev.silenium.libs.libav
 
 import dev.silenium.libs.av.core.PacketFlag
 import dev.silenium.libs.av.core.PixelFormat
+import dev.silenium.libs.av.core.context.FormatContext
+import dev.silenium.libs.av.core.data.Codec
 import dev.silenium.libs.av.core.data.Packet
+import dev.silenium.libs.av.core.data.durationFromAV
+import dev.silenium.libs.av.core.data.toAV
 import dev.silenium.libs.av.hw.HWDeviceContext
 import dev.silenium.libs.av.hw.HWDeviceType
 import dev.silenium.libs.av.hw.HWFramesContext
@@ -10,8 +14,31 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import org.ffmpeg.bindings.AVPacket
 import java.nio.ByteBuffer
+import java.nio.file.Files
+import kotlin.io.path.Path
 
 class MainTest : FunSpec({
+    val tmpFile = Files.createTempFile("test", ".webm")
+    test("format context") {
+        FormatContext.Output.openFile(tmpFile, "webm").getOrThrow().use { outCtx ->
+            val outStream = outCtx.addStream(Codec.findEncoder(Codec.ID.CODEC_VP9).getOrThrow())
+            FormatContext.Input.openFile(Path("src/test/resources/test.webm")).getOrThrow().use { fmtCtx ->
+                println("Input format: ${fmtCtx.iFormat.name}")
+                val packet = fmtCtx.readPacket().getOrThrow()
+                val stream = fmtCtx.streams[packet.streamIndex]
+                outStream.codecParams = stream.codecParams
+                val duration = packet.duration.durationFromAV(stream.timeBase)
+                duration.toAV(stream.timeBase) shouldBe packet.duration
+                println("Stream: idx=${stream.index} codec=${stream.codecParams.codecId}")
+                println("Packet: stream=${packet.streamIndex} size=${packet.size} duration=${packet.duration.durationFromAV(stream.timeBase)}")
+                packet.streamIndex = outStream.index
+                outCtx.writeHeader().getOrThrow()
+                outCtx.writePacketInterleaved(packet).getOrThrow()
+            }
+            outCtx.writeTrailer().getOrThrow()
+        }
+    }
+
     test("simple") {
         Packet().use { packet ->
             packet.data = "Hello".encodeToByteArray().let(ByteBuffer::wrap)

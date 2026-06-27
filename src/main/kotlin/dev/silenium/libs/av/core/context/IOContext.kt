@@ -1,6 +1,7 @@
 package dev.silenium.libs.av.core.context
 
 import dev.silenium.libs.av.foreign.DoubleDestructionProtection
+import dev.silenium.libs.av.foreign.NativeEnum
 import dev.silenium.libs.av.foreign.pointerTo
 import dev.silenium.libs.av.foreign.upcallStub
 import org.ffmpeg.bindings.FFMPEG
@@ -76,4 +77,12 @@ sealed class IOContext : AutoCloseable, DoubleDestructionProtection<MemorySegmen
             FFMPEG.avio_close(value)
         }
     }
+}
+
+enum class IOFlag(override val value: Int) : NativeEnum {
+    DIRECT(FFMPEG.AVIO_FLAG_DIRECT()),
+    NONBLOCK(FFMPEG.AVIO_FLAG_NONBLOCK()),
+    READ(FFMPEG.AVIO_FLAG_READ()),
+    READ_WRITE(FFMPEG.AVIO_FLAG_READ_WRITE()),
+    WRITE(FFMPEG.AVIO_FLAG_WRITE()),
 }

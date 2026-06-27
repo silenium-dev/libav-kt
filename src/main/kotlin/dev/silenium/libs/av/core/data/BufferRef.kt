@@ -20,14 +20,19 @@ data class BufferRef(override val value: MemorySegment) : DoubleDestructionProte
     }
 
     companion object {
-        fun of(buf: MemorySegment) = if (buf != MemorySegment.NULL) BufferRef(buf) else null
-
-        fun createPtrPtr(layout: MemoryLayout, block: (Arena, MemorySegment) -> Unit): Result<BufferRef> = Arena.ofConfined().use { arena ->
-            val ptr = arena.allocate(ValueLayout.ADDRESS)
-            runCatching {
-                block(arena, ptr)
-                BufferRef(ptr.get(ValueLayout.ADDRESS, 0).reinterpret(layout.byteSize()))
-            }
+        fun of(buf: MemorySegment) = if (buf != MemorySegment.NULL) {
+            BufferRef(buf.reinterpret(AVBufferRef.sizeof()))
+        } else {
+            null
         }
+
+        fun createPtrPtr(layout: MemoryLayout, block: (Arena, MemorySegment) -> Unit): Result<BufferRef> =
+            Arena.ofConfined().use { arena ->
+                val ptr = arena.allocate(ValueLayout.ADDRESS)
+                runCatching {
+                    block(arena, ptr)
+                    BufferRef(ptr.get(ValueLayout.ADDRESS, 0).reinterpret(layout.byteSize()))
+                }
+            }
     }
 }

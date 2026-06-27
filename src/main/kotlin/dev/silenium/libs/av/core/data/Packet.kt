@@ -8,6 +8,7 @@ import dev.silenium.libs.av.foreign.asPointerArray
 import dev.silenium.libs.av.foreign.parseNativeEnumSet
 import dev.silenium.libs.av.foreign.pointerTo
 import org.ffmpeg.bindings.AVPacket
+import org.ffmpeg.bindings.AVPacketSideData
 import org.ffmpeg.bindings.FFMPEG
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -16,6 +17,7 @@ import java.nio.ByteBuffer
 data class Packet private constructor(
     override val value: MemorySegment,
     private val arena: Arena,
+    private val isOwned: Boolean = true,
 ) : DoubleDestructionProtection<MemorySegment>() {
     constructor(value: MemorySegment) : this(value, Arena.ofAuto())
 
@@ -50,7 +52,9 @@ data class Packet private constructor(
         set(value) = AVPacket.duration(this.value, value)
 
     var sideData: List<PacketSideData>
-        get() = AVPacket.side_data(value).asPointerArray(AVPacket.side_data_elems(value), ::PacketSideData)
+        get() = AVPacket.side_data(value).asPointerArray(AVPacket.side_data_elems(value)) {
+            PacketSideData(it.reinterpret(AVPacketSideData.sizeof()))
+        }
         set(value) = AVPacket.side_data(this.value, value.asNativeArray(arena, PacketSideData::value))
     var flags: Set<PacketFlag>
         get() = AVPacket.flags(value).let(::parseNativeEnumSet)
@@ -62,7 +66,9 @@ data class Packet private constructor(
         get() = AVPacket.opaque_ref(value).takeIf { it != MemorySegment.NULL }?.let(BufferRef::of)
 
     override fun destroyInternal() {
-        FFMPEG.av_packet_free(arena.pointerTo(value))
+        if (isOwned) {
+            FFMPEG.av_packet_free(arena.pointerTo(value))
+        }
     }
 
     override fun toString(): String {
@@ -72,5 +78,9 @@ data class Packet private constructor(
     companion object {
         operator fun invoke() =
             FFMPEG.av_packet_alloc().reinterpret(AVPacket.sizeof()).let(::Packet)
+
+        fun ofUnowned(value: MemorySegment) = Packet(value, Arena.ofAuto(), false)
+
+        fun ref(original: Packet) = Packet(FFMPEG.av_packet_clone(original.value), Arena.ofAuto(), true)
     }
 }
