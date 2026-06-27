@@ -1,36 +1,20 @@
 package dev.silenium.libs.av.core.context
 
+import dev.silenium.libs.av.core.IOFlag
 import dev.silenium.libs.av.core.av
 import dev.silenium.libs.av.core.avResult
 import dev.silenium.libs.av.core.checkAV
-import dev.silenium.libs.av.core.data.Codec
-import dev.silenium.libs.av.core.data.Dictionary
-import dev.silenium.libs.av.core.data.Packet
-import dev.silenium.libs.av.core.data.Stream
+import dev.silenium.libs.av.core.data.*
 import dev.silenium.libs.av.foreign.*
 import org.ffmpeg.bindings.AVFormatContext
-import org.ffmpeg.bindings.AVInputFormat
-import org.ffmpeg.bindings.AVOutputFormat
 import org.ffmpeg.bindings.AVStream
 import org.ffmpeg.bindings.FFMPEG
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import java.nio.ByteBuffer
-import java.nio.file.Path
-import kotlin.io.path.absolutePathString
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.microseconds
-
-class InputFormat(val value: MemorySegment) {
-    val name: String
-        get() = AVInputFormat.name(value).reinterpret(Long.MAX_VALUE).getString(0L)
-}
-
-class OutputFormat(val value: MemorySegment) {
-    val name: String
-        get() = AVOutputFormat.name(value).reinterpret(Long.MAX_VALUE).getString(0L)
-}
 
 sealed class FormatContext : AutoCloseable, DoubleDestructionProtection<MemorySegment>() {
     abstract val arena: Arena
@@ -225,17 +209,17 @@ sealed class FormatContext : AutoCloseable, DoubleDestructionProtection<MemorySe
         }
 
         companion object {
-            fun openFile(path: Path, formatHint: String? = null): Result<Input> = Arena.ofConfined().use { arena ->
-                val ptr = arena.allocate(ValueLayout.ADDRESS)
-                val fmt = formatHint?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL
-                val url = arena.allocateFrom(path.absolutePathString())
-                return Result.av(
-                    FFMPEG.avformat_open_input(ptr, url, fmt, MemorySegment.NULL),
-                    "avformat_open_input",
-                ) {
-                    ptr.get(ValueLayout.ADDRESS, 0)
-                        .reinterpret(AVFormatContext.sizeof())
-                        .let(::Input)
+            fun openCustom(ioCtx: IOContext, format: InputFormat? = null) = Arena.ofConfined().use { arena ->
+                val ctx = FFMPEG.avformat_alloc_context().reinterpret(AVFormatContext.sizeof())
+                AVFormatContext.pb(ctx, ioCtx.value)
+                val ret = FFMPEG.avformat_open_input(
+                    arena.pointerTo(ctx),
+                    format?.value ?: MemorySegment.NULL,
+                    MemorySegment.NULL,
+                    MemorySegment.NULL,
+                )
+                Result.av(ret, "avformat_open_input") {
+                    Input(ctx, ioCtx)
                 }
             }
         }
@@ -287,22 +271,28 @@ sealed class FormatContext : AutoCloseable, DoubleDestructionProtection<MemorySe
         fun writePacketInterleaved(packet: Packet) =
             Result.av(FFMPEG.av_interleaved_write_frame(value, packet.value), "av_interleaved_write_frame")
 
+        fun writePacket(packet: Packet) =
+            Result.av(FFMPEG.av_write_frame(value, packet.value), "av_write_frame")
+
+        fun flush() = Result.av(FFMPEG.av_write_frame(value, MemorySegment.NULL), "av_write_frame")
+
         fun writeHeader() = Result.av(FFMPEG.avformat_write_header(value, MemorySegment.NULL), "avformat_write_header")
 
         fun writeTrailer() = Result.av(FFMPEG.av_write_trailer(value), "av_write_trailer")
 
         companion object {
-            fun openFile(path: Path, format: String) = Arena.ofConfined().use { arena ->
+            fun open(ioCtx: IOContext, format: OutputFormat) = Arena.ofConfined().use { arena ->
                 val ptr = arena.allocate(ValueLayout.ADDRESS)
-                val url = arena.allocateFrom(path.absolutePathString())
-                val fmt = arena.allocateFrom(format)
-                Result.av(
-                    FFMPEG.avformat_alloc_output_context2(ptr, MemorySegment.NULL, MemorySegment.NULL, url),
-                    "avformat_alloc_output_context2",
-                ) {
-                    ptr.get(ValueLayout.ADDRESS, 0)
-                        .reinterpret(AVFormatContext.sizeof())
-                        .let(::Output)
+                val ret = FFMPEG.avformat_alloc_output_context2(
+                    ptr,
+                    format.value,
+                    MemorySegment.NULL,
+                    MemorySegment.NULL
+                )
+                Result.av(ret, "avformat_alloc_output_context2") {
+                    val ctx = ptr.get(ValueLayout.ADDRESS, 0).reinterpret(AVFormatContext.sizeof())
+                    AVFormatContext.pb(ctx, ioCtx.value)
+                    Output(ctx, ioCtx)
                 }
             }
         }

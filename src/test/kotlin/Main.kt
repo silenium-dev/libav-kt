@@ -1,42 +1,76 @@
 package dev.silenium.libs.libav
 
+import dev.silenium.libs.av.core.AVException
 import dev.silenium.libs.av.core.PacketFlag
 import dev.silenium.libs.av.core.PixelFormat
+import dev.silenium.libs.av.core.context.ClasspathIOCallback
 import dev.silenium.libs.av.core.context.FormatContext
+import dev.silenium.libs.av.core.context.IOContext
 import dev.silenium.libs.av.core.data.Codec
+import dev.silenium.libs.av.core.data.OutputFormat
 import dev.silenium.libs.av.core.data.Packet
-import dev.silenium.libs.av.core.data.durationFromAV
-import dev.silenium.libs.av.core.data.toAV
 import dev.silenium.libs.av.hw.HWDeviceContext
 import dev.silenium.libs.av.hw.HWDeviceType
 import dev.silenium.libs.av.hw.HWFramesContext
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import org.ffmpeg.bindings.AVPacket
+import org.ffmpeg.bindings.FFMPEG
+import java.lang.foreign.MemorySegment
 import java.nio.ByteBuffer
-import java.nio.file.Files
-import kotlin.io.path.Path
 
 class MainTest : FunSpec({
-    val tmpFile = Files.createTempFile("test", ".webm")
-    test("format context") {
-        FormatContext.Output.openFile(tmpFile, "webm").getOrThrow().use { outCtx ->
-            val outStream = outCtx.addStream(Codec.findEncoder(Codec.ID.CODEC_VP9).getOrThrow())
-            FormatContext.Input.openFile(Path("src/test/resources/test.webm")).getOrThrow().use { fmtCtx ->
-                println("Input format: ${fmtCtx.iFormat.name}")
-                val packet = fmtCtx.readPacket().getOrThrow()
-                val stream = fmtCtx.streams[packet.streamIndex]
-                outStream.codecParams = stream.codecParams
-                val duration = packet.duration.durationFromAV(stream.timeBase)
-                duration.toAV(stream.timeBase) shouldBe packet.duration
-                println("Stream: idx=${stream.index} codec=${stream.codecParams.codecId}")
-                println("Packet: stream=${packet.streamIndex} size=${packet.size} duration=${packet.duration.durationFromAV(stream.timeBase)}")
-                packet.streamIndex = outStream.index
-                outCtx.writeHeader().getOrThrow()
-                outCtx.writePacketInterleaved(packet).getOrThrow()
+    test("remux") {
+        val outCtx = object : IOContext.Custom.WritableCallback {
+            override fun write(ptr: MemorySegment): Int {
+                println("Wrote ${ptr.byteSize()} bytes")
+                return ptr.byteSize().toInt()
             }
-            outCtx.writeTrailer().getOrThrow()
+
+            override fun read(ptr: MemorySegment): Int {
+                println("Read ${ptr.byteSize()} bytes")
+                return 0
+            }
+
+            override fun seek(offset: Long, whence: IOContext.Custom.Whence): Long {
+                println("Seeked to $offset ($whence)")
+                return 0L
+            }
+
+            override fun close() {
+                println("Closed")
+            }
         }
+        FormatContext.Output.open(IOContext.Custom(outCtx), OutputFormat.guess("matroska")!!).getOrThrow()
+            .use { outCtx ->
+                val outStream = outCtx.addStream(Codec.findEncoder(Codec.ID.CODEC_VP9).getOrThrow())
+                FormatContext.Input.openCustom(IOContext.Custom(ClasspathIOCallback("test.webm"))).getOrThrow()
+                    .use { fmtCtx ->
+                        println("Input format: ${fmtCtx.iFormat.name}")
+                        var packet = fmtCtx.readPacket().getOrThrow()
+                        val inStream = fmtCtx.streams[packet.streamIndex]
+                        outStream.timeBase = inStream.timeBase
+                        outStream.codecParams = inStream.codecParams
+                        outCtx.writeHeader().getOrThrow()
+                        while (true) {
+                            packet.streamIndex = outStream.index
+                            outCtx.writePacketInterleaved(packet).getOrThrow()
+                            packet = fmtCtx.readPacket().getOrElse {
+                                if (it is AVException && it.ret == FFMPEG.AVERROR_EOF()) break
+                                throw it
+                            }
+                        }
+                    }
+                outCtx.writeTrailer().getOrThrow()
+            }
+        val cb = ClasspathIOCallback("test.webm")
+        cb.seek(0L, IOContext.Custom.Whence(IOContext.Custom.SeekOrigin.END)) shouldBeGreaterThan 0L
+        cb.seek(0L, IOContext.Custom.Whence(IOContext.Custom.SeekOrigin.SET)) shouldBe 0L
+        val buf = ByteArray(1024)
+        cb.read(MemorySegment.ofArray(buf)) shouldBeGreaterThan 0
+        cb.close()
     }
 
     test("simple") {

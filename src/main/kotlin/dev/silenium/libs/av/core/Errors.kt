@@ -3,7 +3,7 @@ package dev.silenium.libs.av.core
 import org.ffmpeg.bindings.FFMPEG
 import java.lang.foreign.Arena
 
-class AVException(ret: Int, operation: String) : Exception("Failed to $operation: ${ret.avErrorMessage()}")
+class AVException(val ret: Int, val operation: String) : Exception("Failed to $operation: ${ret.avErrorMessage()}")
 
 fun Int.avErrorMessage(): String = Arena.ofConfined().use { arena ->
     val str = arena.allocate(FFMPEG.AV_ERROR_MAX_STRING_SIZE().toLong())
