@@ -3,7 +3,6 @@ package dev.silenium.libs.av.core.context
 import dev.silenium.libs.av.core.IOFlag
 import dev.silenium.libs.av.core.av
 import dev.silenium.libs.av.core.avResult
-import dev.silenium.libs.av.core.checkAV
 import dev.silenium.libs.av.core.data.*
 import dev.silenium.libs.av.foreign.*
 import org.ffmpeg.bindings.AVFormatContext
@@ -209,7 +208,7 @@ sealed class FormatContext : AutoCloseable, DoubleDestructionProtection<MemorySe
         }
 
         companion object {
-            fun openCustom(ioCtx: IOContext, format: InputFormat? = null) = Arena.ofConfined().use { arena ->
+            fun open(ioCtx: IOContext, format: InputFormat? = null) = Arena.ofConfined().use { arena ->
                 val ctx = FFMPEG.avformat_alloc_context().reinterpret(AVFormatContext.sizeof())
                 AVFormatContext.pb(ctx, ioCtx.value)
                 val ret = FFMPEG.avformat_open_input(

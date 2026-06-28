@@ -46,7 +46,7 @@ class MainTest : FunSpec({
         FormatContext.Output.open(IOContext.Custom(outCtx), OutputFormat.guess("matroska")!!).getOrThrow()
             .use { outCtx ->
                 val outStream = outCtx.addStream(Codec.findEncoder(Codec.ID.CODEC_VP9).getOrThrow())
-                FormatContext.Input.openCustom(IOContext.Custom(ClasspathIOCallback("test.webm"))).getOrThrow()
+                FormatContext.Input.open(IOContext.Custom(ClasspathIOCallback("test.webm"))).getOrThrow()
                     .use { fmtCtx ->
                         println("Input format: ${fmtCtx.iFormat.name}")
                         var packet = fmtCtx.readPacket().getOrThrow()
